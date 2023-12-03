@@ -6,6 +6,7 @@ import os
 from datetime import datetime as dt
 import yaml 
 from pyspark.sql import SparkSession
+import pyspark.sql.functions as f
 
 # Read in YAML for AWS creds
 # Specify the path to your YAML file
@@ -33,11 +34,11 @@ spark = SparkSession \
     .config("spark.hadoop.fs.s3a.secret.key", creds['aws_secret_access_key']) \
     .getOrCreate()
 
-df = spark \
-    .read \
-    .format("csv") \
-    .option("header", True) \
-    .load("s3a://sgi-dk/data_2023-11-12_07-59-26.csv")
+# df = spark \
+#     .read \
+#     .format("csv") \
+#     .option("header", True) \
+#     .load("s3a://sgi-dk/data_2023-11-12_07-59-26.csv")
 
 # List objects in S3
 objs = list(s3.Bucket('sgi-dk').objects.all())
@@ -62,3 +63,12 @@ for o in objs:
         df = tmp_df
     # Append name to objects to delete
     # objs_to_del = objs_to_del.append(str(o.key))
+
+# Clean up data
+df = df \
+    .withColumn('spread_line', f.expr("substring(spread, 1, length(spread)-4)")) \
+    .withColumn('spread_odds', f.expr("substring(spread, length(spread)-3, length(spread))")) \
+    .withColumn('total_line', f.expr("substring(total, 1, length(total)-4)")) \
+    .withColumn('total_odds', f.expr("substring(total, length(total)-3, length(total))")) \
+    .withColumn('line_time_status', f.split(df.team, "PM|AM|Quarter")) \ 
+    .withColumn('team_name', f.split(df.team, "PM|AM|Quarter", 2).getItem(1))
