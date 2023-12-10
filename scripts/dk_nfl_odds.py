@@ -7,6 +7,7 @@ from botocore.exceptions import NoCredentialsError
 import os
 from datetime import datetime as dt
 import yaml 
+import re
 
 # Function to connect to S3
 
@@ -37,7 +38,7 @@ def connectToS3():
     return(s3)
 
 # Function to get NFL lines
-def getNflLines(url):
+def getNflLinks(url):
 
     # Print status
     print("Getting NFL odds...")
@@ -52,55 +53,57 @@ def getNflLines(url):
         print(f"error getting data for {dk_base}")
 
     # Get content into BS4
-    dk_soup = BeautifulSoup(dk_html.content, "html.parser")
+    dk_soup = BeautifulSoup(dk_html.content, "lxml")
 
-    # Get the body of the page
-    dk_body = dk_soup.find(class_ = "sportsbook-wrapper__body")
+    # Get html to text form
+    dk_txt = str(dk_soup.get_text)
 
-    # Get tables
-    tbls = dk_body.find_all("table")
+    # Pattern for URLs
+    pattern = r'\"url\":\"\s*(.*?)\"\s*'
 
-    # Read into pandas
+    # Extract links
+    lnks = re.findall(pattern, dk_txt)
+
+    # Keep only those that are for events
+    lnks = [l for l in lnks if 'http' in l and 'event' in l]
+
+    return(lnks)
+
+def getEventData(url):
+
+    # Set URL
+    dk_base = url
+
+    # Get the basic HTML from the page
+    try:
+        dk_html = requests.get(dk_base)
+    except:
+        print(f"error getting data for {dk_base}")
+
+    # Get content into BS4
+    dk_soup = BeautifulSoup(dk_html.content, "lxml")
+
+    # Get table content
+    tbls = dk_soup.find_all("table")
+
+    # # Extract tables to pandas
     dfs = pd.read_html(str(tbls))
 
-    # Iterate over tables to keep only the necessary ones
-    for i in range(0, len(dfs)):
-        # Extract dataframe
-        tmp_df = dfs[i]
-        
-        # Check number of columns
-        if tmp_df.shape[1] > 3:
+    # Get the first table which has game odds
+    game_odds = dfs[0]
 
-            # Extract the date from the column name
-            line_dt = tmp_df.columns[0]
+    # Extract the event name
+    evnt_name = dk_soup.find(class_ = "sportsbook-breadcrumb__end").text
+    evnt_name = evnt_name.replace('\xa0', '').replace('/', '')
 
-            # Rename columns using the dictionary
-            tmp_df = tmp_df.set_axis(['team', 'spread', 'total', 'moneyline'], axis=1)
+    # Add name to event data
+    game_odds['event_name'] = evnt_name
 
-            # Assign date field
-            tmp_df['line_dt'] = line_dt
-            
-            # Bind data to other dataframes
-            try:
-                res_df = pd.concat([res_df, tmp_df])
-            except:
-                res_df = tmp_df
+    # Add a load timestamp
+    game_odds['load_ts'] = dt.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-        # Skip if wrong data format
-        else:
-            pass
-
-    # Get current timestamp
-    current_timestamp = dt.now().strftime("%Y-%m-%d_%H-%M-%S")
-
-    # Add load date & timestamp to data
-    res_df['load_ts'] = current_timestamp
-
-    # Write data to csv with timestamp name
-    res_df.to_csv(f'data_{current_timestamp}.csv')
-
-    # Return local filepath for writing to S3
-    return(f'data_{current_timestamp}.csv')
+    # Return data
+    return(game_odds)
 
 # Function to write to S3 bucket
 # Read in filepath for CSV
@@ -125,9 +128,32 @@ def main():
     # Set url lines
     url = "https://sportsbook.draftkings.com/leagues/football/nfl"
 
-    # Get NFL betting lines from DK and write to CSV
-    # Returns file path for writing to S3
-    fp = getNflLines(url)
+    # Get links for games
+    lnks = getNflLinks(url)
+
+    # Iterate over links and get game dataframes
+    for l in lnks:
+        print(f"Getting data for {l}")
+        # Get game data
+        try:
+            gm_df = getEventData(l)
+            # Concat data for overall data frame
+            try:
+                all_games = pd.concat(all_games, gm_df)
+            except:
+                all_games = gm_df
+        except:
+            print(f"Issue getting data for {l}")
+
+    # Write data to CSV
+    # Get current timestamp
+    current_timestamp = dt.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+    # Write data to csv with timestamp name
+    all_games.to_csv(f'data_{current_timestamp}.csv')
+
+    # Set file path
+    fp = 'data_' + str(current_timestamp) + '.csv'
 
     # Upload to S3
     uploadToS3(s3, fp)

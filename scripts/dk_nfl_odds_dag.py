@@ -18,7 +18,7 @@ default_args = {
     'start_date': airflow.utils.dates.days_ago(1),
     'depends_on_past': False,
     'retries': 1,
-    'retry_delay': timedelta(minutes = 5)
+    'retry_delay': timedelta(minutes = 1)
 }
 
 # Create the DAG
