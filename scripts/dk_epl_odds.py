@@ -38,7 +38,7 @@ def connectToS3():
     return(s3)
 
 # Function to get NFL lines
-def getNflLinks(url):
+def getEplLinks(url):
 
     # Set URL
     dk_base = url
@@ -128,9 +128,6 @@ def main():
     # Get links for games
     lnks = getNflLinks(url)
 
-    # Drop any duplicate links
-    lnks = list(set(lnks))
-
     # Iterate over links and get game dataframes
     for l in lnks:
         print(f"Getting data for {l}")
@@ -139,7 +136,7 @@ def main():
             gm_df = getEventData(l)
             # Concat data for overall data frame
             try:
-                all_games = pd.concat([all_games, gm_df])
+                all_games = pd.concat(all_games, gm_df)
             except:
                 all_games = gm_df
         except:

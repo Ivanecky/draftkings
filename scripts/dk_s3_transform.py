@@ -60,6 +60,7 @@ for o in objs:
     try:
         df = df.union(tmp_df)
     except:
+        print(f"Issue reading object {o}")
         df = tmp_df
     # Append name to objects to delete
     # objs_to_del = objs_to_del.append(str(o.key))
@@ -70,5 +71,5 @@ df = df \
     .withColumn('spread_odds', f.expr("substring(spread, length(spread)-3, length(spread))")) \
     .withColumn('total_line', f.expr("substring(total, 1, length(total)-4)")) \
     .withColumn('total_odds', f.expr("substring(total, length(total)-3, length(total))")) \
-    .withColumn('line_time_status', f.split(df.team, "PM|AM|Quarter")) \ 
+    .withColumn('line_time_status', f.split(df.team, "PM|AM|Quarter", 2).getItem(0)) \
     .withColumn('team_name', f.split(df.team, "PM|AM|Quarter", 2).getItem(1))

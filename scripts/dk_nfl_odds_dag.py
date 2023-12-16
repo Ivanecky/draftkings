@@ -28,12 +28,13 @@ dag = DAG(
     description='DK NFL Odds DAG',
     schedule_interval = '* * * * *',
     start_date=airflow.utils.dates.days_ago(1),
+    max_active_runs = 1
 )
 
 # Python operator to run dk_nfl_odds.py
 run_odds_scraper = BashOperator(
     task_id = 'nfl_odds_scrape',
-    bash_command = 'python3.9 /Users/samivanecky/airflow/scripts/dk_nfl_odds.py',
+    bash_command = 'python3.9 /Users/samivanecky/git/draftkings/scripts/dk_nfl_odds.py',
     dag = dag
 )
 
